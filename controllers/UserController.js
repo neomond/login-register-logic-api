@@ -1,100 +1,86 @@
 const { User } = require("../models/User");
 const { confirmCodeEmail } = require("../utils/emailService");
+const jwt = require("jsonwebtoken");
+let privateKey = process.env.PRIVATE_KEY;
 
 const userController = {
-  SendMailReq: async (req, res) => {
-    const randomCode = Math.floor(1000 + Math.random() * 900000);
-    await confirmCodeEmail(req.body.email, randomCode);
-    res.sendStatus(200);
-  },
-
-  register: async (req, res) => {
-    try {
-      const existingUser = await User.findOne({ email: req.body.email });
-      if (existingUser) {
-        return res.json({ msg: "This email is already registered!" });
-      }
-
-      const randomCode = Math.floor(Math.random() * 10000);
-      await confirmCodeEmail(req.body.email, randomCode);
-
-      const newUser = new User({
-        email: req.body.email,
-        password: req.body.password,
-        code: randomCode,
+  confirmCode: (req, res) => {
+    User.findOne({ email: req.body.email, code: req.body.code })
+      .then((data) => {
+        if (data) {
+          let token = jwt.sign({ email: req.body.email }, privateKey, {
+            algorithm: "HS256",
+            expiresIn: "30d",
+            issuer: "iron maiden ın tokenı",
+          });
+          data.isConfirm = true;
+          data.save();
+          res.json({ email: req.body.email, token });
+        } else {
+          res.status(404).json({ msg: "Confirm Code error" });
+        }
+      })
+      .catch((err) => {
+        res.status(500).send("Mongo error!", err.message);
       });
-
-      const savedUser = await newUser.save();
-      res.json(savedUser);
-    } catch (err) {
-      res.status(500).json(err);
-    }
   },
+  auth: (req, res) => {
+    const randomCode = Math.floor(Math.random() * 10000);
+    User.findOne({ email: req.body.email }).then(async (data) => {
+      if (data) {
+        data.code = randomCode;
+        await data.save();
 
-  confirmCode: async (req, res) => {
-    try {
-      const { email, code } = req.body;
-      const user = await User.findOne({ email, code });
-      if (user) {
-        res.json({ email });
+        confirmCodeEmail(req.body.email, randomCode);
+        res.json({ email: req.body.email });
       } else {
-        res.status(404).json({ msg: "Confirmation code error" });
+        confirmCodeEmail(req.body.email, randomCode);
+        const newUser = new User({
+          email: req.body.email,
+          code: randomCode,
+        });
+        newUser.save();
+        res.json({ email: newUser.email });
       }
-    } catch (err) {
-      res.status(500).send("Mongo error!");
-    }
+    });
   },
+  forgotPassword: (req, res) => {
+    User.findOne({ email: req.body.email }).then((data) => {
+      if (data) {
+        var randomCode = Math.floor(Math.random() * 10000);
+        data.code = randomCode;
+        data.save();
 
-  login: async (req, res) => {
-    try {
-      const { email, password } = req.body;
-      const user = await User.findOne({ email, password });
-      if (user) {
-        const randomCode = Math.floor(Math.random() * 10000);
-        user.code = randomCode;
-        await user.save();
-        await confirmCodeEmail(email, randomCode);
-        res.json({ email });
+        confirmCodeEmail(req.body.email, randomCode);
+        res.json({ email: req.body.email });
       } else {
-        res.status(404).json({ msg: "Email or password error" });
+        res.status(404).json({ msg: "Email error" });
       }
-    } catch (err) {
-      res.status(500).json(err);
-    }
+    });
   },
-
-  forgotPassword: async (req, res) => {
-    try {
-      const { email } = req.body;
-      const user = await User.findOne({ email });
-      if (user) {
-        const randomCode = Math.floor(Math.random() * 10000);
-        user.code = randomCode;
-        await user.save();
-        await confirmCodeEmail(email, randomCode);
-        res.json({ email });
-      } else {
-        res.status(404).json({ msg: "Email not found" });
-      }
-    } catch (err) {
-      res.status(500).json(err);
-    }
+  newPassword: (req, res) => {
+    User.findOne({ email: req.body.email })
+      .then((data) => {
+        if (data) {
+          data.password = req.body.password;
+          data.save();
+          res.json({ email: req.body.email });
+        }
+        {
+          res.status(404).json({ msg: "Not found!" });
+        }
+      })
+      .catch((err) => {
+        res.status(500).json(err);
+      });
   },
-
-  newPassword: async (req, res) => {
-    try {
-      const { email, password } = req.body;
-      const user = await User.findOne({ email });
-      if (user) {
-        user.password = password;
-        await user.save();
-        res.json({ email });
-      } else {
-        res.status(404).json({ msg: "User not found!" });
-      }
-    } catch (err) {
-      res.status(500).json(err);
-    }
+  getUser: (req, res) => {
+    let data = req.headers.authorization.split(" ");
+    const email = jwt.decode(data[1]).email;
+    res.json({
+      text: `gizli melumat, mailin uzunlugu ${email.length} ${email}`,
+    });
+    console.log("sa", email);
   },
 };
 

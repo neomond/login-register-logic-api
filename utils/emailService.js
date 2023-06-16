@@ -13,7 +13,7 @@ const transporter = nodemailer.createTransport({
 
 function confirmCodeEmail(userEMail, confirmCode) {
   transporter.sendMail({
-    from: "nazrinta@code.edu.az",
+    from: "haqqinnyolu@gmail.com",
     to: userEMail,
     subject: "Confirm Code",
     text: "confirmation code: " + confirmCode,
